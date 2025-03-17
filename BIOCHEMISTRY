@@ -1,0 +1,69 @@
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import requests
+from io import StringIO
+
+# Load the datasets while correcting the whitespaces within the column
+sift_url = "https://raw.githubusercontent.com/HackBio-Internship/public_datasets/main/R/datasets/sift.tsv"
+response = requests.get(sift_url)
+raw_dataset = response.text
+sift_df = pd.read_csv(StringIO(raw_dataset), delim_whitespace=True)  
+
+foldx_url = "https://raw.githubusercontent.com/HackBio-Internship/public_datasets/main/R/datasets/foldX.tsv"
+response = requests.get(foldx_url)
+raw_dataset = response.text
+foldx_df = pd.read_csv(StringIO(raw_dataset), delim_whitespace=True)  
+
+# Create 'specific_Protein_aa' column
+sift_df["specific_Protein_aa"] = sift_df["Protein"] + '_' + sift_df["Amino_Acid"]
+foldx_df["specific_Protein_aa"] = foldx_df["Protein"] + '_' + foldx_df["Amino_Acid"]
+
+# Merge the foldx and sift dataframes into one dataframe (merged_df) by using the specific_Protein_aa as a column
+foldx_clean_df = foldx_df.drop(columns=['Protein', 'Amino_Acid'])
+merged_df = pd.merge(sift_df, foldx_clean_df, on='specific_Protein_aa', how='inner')
+
+# Identify deleterious mutations
+deleterious_mutations = merged_df[(merged_df['sift_Score'] < 0.05) & (merged_df['foldX_Score'] > 2)]
+
+print("Deleterious Mutations (affecting both structure and function):")
+print(deleterious_mutations)
+
+
+# Amino acid impact analysis
+def get_original_aa(amino_acid_notation):
+    #Handles cases like E63D, where E is the original amino acid
+    return amino_acid_notation[0]
+
+merged_df['original_aa'] = merged_df['Amino_Acid'].apply(get_original_aa)
+
+# Amino acid frequency table
+aa_frequency = merged_df['original_aa'].value_counts()
+print("\nAmino Acid Frequency Table:")
+print(aa_frequency)
+
+# Barplot
+plt.figure(figsize=(10, 6))
+sns.barplot(x=aa_frequency.index, y=aa_frequency.values)
+plt.xlabel("Amino Acid")
+plt.ylabel("Frequency")
+plt.title("Amino Acid Frequency Barplot")
+plt.show()
+
+# Pie chart
+plt.figure(figsize=(8, 8))
+plt.pie(aa_frequency.values, labels=aa_frequency.index, autopct='%1.1f%%', startangle=90)
+plt.title("Amino Acid Frequency Pie Chart")
+plt.show()
+
+
+# Amino acid with highest impact
+most_impactful_aa = aa_frequency.idxmax()
+print(f"\nAmino acid with the highest frequency: {most_impactful_aa}")
+
+
+# Analysis of amino acids with > 100 occurrences
+frequent_aas = aa_frequency[aa_frequency > 100]
+print("\nAmino Acids with > 100 Occurrences:")
+print(frequent_aas)
